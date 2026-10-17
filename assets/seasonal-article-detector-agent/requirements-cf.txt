@@ -1,0 +1,33 @@
+# Cloud Foundry requirements — used by the CF Python buildpack.
+# Joule-only packages (sap-cloud-sdk, litellm, click==8.1.8) are excluded
+# because they conflict with sap-ai-sdk-gen's click pin.
+
+# ── CF AI Core ───────────────────────────────────────────────────────────────
+sap-ai-sdk-gen==6.6.0
+
+# ── Core LangChain / agent framework ────────────────────────────────────────
+langchain==1.2.10
+langchain-core==1.5.0
+langchain-mcp-adapters==0.2.2
+langgraph==1.2.6
+a2a-sdk[all]==0.3.22
+
+# ── HTTP / server ────────────────────────────────────────────────────────────
+fastapi==0.141.1
+uvicorn[standard]~=0.30
+gunicorn~=22.0
+httpx==0.28.1
+python-dotenv==1.2.2
+PyYAML==6.0.3
+sqlalchemy==2.0.36
+google-re2==1.1.20251105
+
+# ── Science / detection ──────────────────────────────────────────────────────
+statsmodels==0.14.4
+numpy==2.2.6
+
+# ── Observability ───────────────────────────────────────────────────────────
+opentelemetry-instrumentation-starlette
+
+# ── MCP adapters ─────────────────────────────────────────────────────────────
+mcp>=1.0.0

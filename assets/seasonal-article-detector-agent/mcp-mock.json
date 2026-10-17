@@ -1,0 +1,119 @@
+{
+  "servers": {
+    "replenishment-adjustment-received": {
+      "mcp_server_name": "sap.mcp/replenishment_adjustment_received",
+      "description": "MCP server for the replenishment_adjustment_received service.",
+      "tools": {
+        "postReplenishmentAdjustmentReceivedUsingPOST": {
+          "description": "POST endpoint for webhook: replenishment-adjustment-received. Triggers replenishment parameter adjustments for seasonal articles.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "object",
+                "description": "Webhook payload — seasonal classification data to trigger replenishment adjustments",
+                "properties": {
+                  "run_id": {"type": "string"},
+                  "classifications": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "article_id": {"type": "string"},
+                        "store_id": {"type": "string"},
+                        "classification": {"type": "string"},
+                        "confidence_score": {"type": "number"},
+                        "season_start_week": {"type": "integer"},
+                        "season_end_week": {"type": "integer"},
+                        "seasonal_strength_index": {"type": "number"}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "run_id": "run-mock-001",
+            "total_received": 3,
+            "processed_count": 3,
+            "skipped_count": 0,
+            "status": "completed",
+            "sample_classifications": [
+              {
+                "article_id": "069DF1A4C66A1EDD9FE71B9227837286",
+                "store_id": "069DF1A4C66A1EDD9EEC30772166C193",
+                "classification": "SEASONAL",
+                "confidence_score": 68.5,
+                "season_start_week": 50,
+                "season_end_week": 6,
+                "seasonal_strength_index": 0.62,
+                "algorithm_used": "stl",
+                "note": "Bimodal pattern: primary peak weeks 50-6 (Dec-Jan), secondary peak weeks 43-47 (Oct-Nov)"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "classification-notification-received": {
+      "mcp_server_name": "sap.mcp/classification_notification_received",
+      "description": "MCP server for the classification_notification_received service.",
+      "tools": {
+        "postClassificationNotificationReceived": {
+          "description": "POST endpoint for webhook: classification-notification-received. Sends notifications to all stakeholder groups.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "object",
+                "description": "Webhook payload — classification run summary for notification dispatch",
+                "properties": {
+                  "run_id": {"type": "string"},
+                  "run_date": {"type": "string"},
+                  "total_classified": {"type": "integer"},
+                  "seasonal_count": {"type": "integer"},
+                  "low_confidence_count": {"type": "integer"},
+                  "dashboard_url": {"type": "string"},
+                  "top_seasonal_articles": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "article_id": {"type": "string"},
+                        "store_id": {"type": "string"},
+                        "season_start_week": {"type": "integer"},
+                        "season_end_week": {"type": "integer"}
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "run_id": "run-mock-001",
+            "notified_count": 4,
+            "total_groups": 4,
+            "status": "completed"
+          }
+        }
+      }
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "created_for_agent": "seasonal-article-detector-agent",
+    "mock_mode": true,
+    "deterministic": true,
+    "total_servers": 2,
+    "total_tools": 2,
+    "generated_from": [
+      "assets/replenishment-adjustment-workflow-mcp-server/mcp-translation/translation.json",
+      "assets/classification-notification-workflow-mcp-server/mcp-translation/translation.json"
+    ],
+    "generation_date": "2026-10-07"
+  }
+}

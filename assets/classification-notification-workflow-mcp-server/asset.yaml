@@ -1,0 +1,21 @@
+apiVersion: asset.sap/v1
+kind: Asset
+type: mcp-server
+
+metadata:
+  name: classification-notification-workflow-mcp-server
+  version: "1.0.0"
+  translation: mcp-translation/translation.json
+  apiSpec: mcp-translation/api-spec.json
+
+requires:
+  - name: classification_notification_received
+    kind: api
+    ordId: sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_classification-notification-workflow.classificationNotificationReceived:v1
+
+provides:
+  apis:
+    - name: classification-notification-received-mcp-server
+      kind: mcp-server
+      description: MCP server for classification notification webhook operations
+      ordId: sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_classification-notification-workflow.classificationNotificationReceived_mcp:v1

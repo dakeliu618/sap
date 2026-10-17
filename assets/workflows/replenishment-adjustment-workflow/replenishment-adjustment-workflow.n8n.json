@@ -1,0 +1,295 @@
+{
+    "name": "Replenishment Adjustment Workflow",
+    "description": "Receives seasonal article/store classifications from the Seasonal Article Detector Agent, validates confidence scores, builds replenishment payloads, invokes the SAP Agent to determine replenishment strategy, checks agent success, and responds with a processing summary.",
+    "nodes": [
+        {
+            "id": "wh-replenishment-001",
+            "name": "Replenishment Adjustment Received",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                0,
+                300
+            ],
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "replenishment-adjustment-received",
+                "responseMode": "responseNode"
+            }
+        },
+        {
+            "id": "split-001",
+            "name": "Split Classifications",
+            "type": "n8n-nodes-base.splitOut",
+            "typeVersion": 1,
+            "position": [
+                220,
+                300
+            ],
+            "parameters": {
+                "fieldToSplitOut": "body.classifications",
+                "include": "allOtherFields"
+            }
+        },
+        {
+            "id": "if-001",
+            "name": "Filter High Confidence",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                440,
+                300
+            ],
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-confidence",
+                            "leftValue": "={{ $json.confidence_score }}",
+                            "rightValue": 60,
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            }
+        },
+        {
+            "id": "code-001",
+            "name": "Build Replenishment Payload",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                660,
+                160
+            ],
+            "parameters": {
+                "mode": "runOnceForEachItem",
+                "language": "javaScript",
+                "jsCode": "// SEASON_LEAD_WEEKS: weeks before season start to begin building stock.\n// Adjust based on your supplier lead times.\nconst SEASON_LEAD_WEEKS = 4;\n\nconst item = $input.item.json;\nconst orderStartWeek = (item.season_start_week || 0) - SEASON_LEAD_WEEKS;\n\nreturn {\n  json: {\n    article_id: item.article_id,\n    store_id: item.store_id,\n    run_id: item.run_id || $('Replenishment Adjustment Received').item.json.body.run_id,\n    replenishment_type: 'SEASONAL',\n    order_start_week: orderStartWeek,\n    season_start_week: item.season_start_week,\n    season_end_week: item.season_end_week,\n    seasonal_strength_index: item.seasonal_strength_index,\n    confidence_score: item.confidence_score\n  }\n};"
+            }
+        },
+        {
+            "id": "agent-001",
+            "name": "Determine Replenishment Strategy",
+            "type": "CUSTOM.sapAgent",
+            "typeVersion": 1,
+            "position": [
+                900,
+                160
+            ],
+            "parameters": {
+                "agents": "[{\"ordId\":\"customer.build:apiResource:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1\",\"name\":\"seasonal-article-detector-agent\"}]",
+                "agentName": "{\"ordId\":\"customer.build:agent:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1\",\"name\":\"Seasonal Article Detector Agent\"}",
+                "input": "={{ 'Determine the replenishment strategy for article ' + $json.article_id + ' at store ' + $json.store_id + '. Season runs from week ' + $json.season_start_week + ' to week ' + $json.season_end_week + '. Seasonal strength index: ' + $json.seasonal_strength_index + '. Confidence: ' + $json.confidence_score + '%. Order start week: ' + $json.order_start_week + '. Recommend: replenishment_strategy (PUSH or PULL), reorder_point_multiplier (1.0-2.0), and rationale.' }}",
+                "sessionId": "={{ $json.run_id + '-' + $json.article_id + '-' + $json.store_id }}"
+            }
+        },
+        {
+            "id": "if-002",
+            "name": "Check Agent Success",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                1120,
+                160
+            ],
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-success",
+                            "leftValue": "={{ $json.success }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            }
+        },
+        {
+            "id": "agg-001",
+            "name": "Aggregate Results",
+            "type": "n8n-nodes-base.aggregate",
+            "typeVersion": 1,
+            "position": [
+                1360,
+                300
+            ],
+            "parameters": {
+                "aggregate": "aggregateAllItemData",
+                "destinationFieldName": "processed_items",
+                "options": {}
+            }
+        },
+        {
+            "id": "code-002",
+            "name": "Build Response Summary",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1580,
+                300
+            ],
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "language": "javaScript",
+                "jsCode": "const items = $input.all();\nconst processedItems = items[0]?.json?.processed_items || [];\nconst runId = $('Replenishment Adjustment Received').first().json.body.run_id || 'unknown';\nconst totalReceived = $('Replenishment Adjustment Received').first().json.body.classifications?.length || 0;\nconst processedCount = processedItems.filter(i => i.success === true).length;\nconst skippedCount = totalReceived - processedCount;\n\nreturn [{\n  json: {\n    run_id: runId,\n    total_received: totalReceived,\n    processed_count: processedCount,\n    skipped_count: skippedCount,\n    status: 'completed'\n  }\n}];"
+            }
+        },
+        {
+            "id": "respond-001",
+            "name": "Respond to Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                1800,
+                300
+            ],
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}"
+            }
+        }
+    ],
+    "connections": {
+        "Replenishment Adjustment Received": {
+            "main": [
+                [
+                    {
+                        "node": "Split Classifications",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split Classifications": {
+            "main": [
+                [
+                    {
+                        "node": "Filter High Confidence",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter High Confidence": {
+            "main": [
+                [
+                    {
+                        "node": "Build Replenishment Payload",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Replenishment Payload": {
+            "main": [
+                [
+                    {
+                        "node": "Determine Replenishment Strategy",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Determine Replenishment Strategy": {
+            "main": [
+                [
+                    {
+                        "node": "Check Agent Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Agent Success": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Aggregate Results",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Aggregate Results": {
+            "main": [
+                [
+                    {
+                        "node": "Build Response Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Build Response Summary": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {
+        "Determine Replenishment Strategy": [
+            {
+                "success": true,
+                "agentName": "Seasonal Article Detector Agent",
+                "ordId": "customer.build:agent:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1",
+                "globalTenantId": null,
+                "messageId": "msg-test-replenishment-001",
+                "sessionId": "run-001-ART001-S001",
+                "blocking": true,
+                "response": "Recommended strategy: PUSH. Reorder point multiplier: 1.5. Rationale: High seasonal strength index of 0.72 with 85% confidence indicates strong predictable demand spike. Begin stock build 4 weeks before season start.",
+                "timestamp": "2026-10-07T14:00:00.000Z"
+            }
+        ]
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "id": "nxoQM9itS8ctSHXo"
+}

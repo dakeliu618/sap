@@ -1,0 +1,33 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: classification-notification-workflow
+  description: Receives a classification run summary and dispatches structured notifications to all stakeholder groups
+  version: "1.0.0"
+  type: n8nworkflow
+
+projectVersion: "1"
+sourceRoot: "."
+
+workflow:
+  definitionFile: classification-notification-workflow.n8n.json
+  name: classification-notification-workflow
+  ordId: sap.btpn8n:apiResource:ManagedN8nMcpServer:v1
+
+requires:
+  - name: seasonal-article-detector-agent
+    kind: agent
+    ordId: customer.build:agent:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1
+
+provides:
+  apis:
+    - name: classification_notification_received
+      path: /seasonal-article-detector-8a850/classification-notification-workflow/classification-notification-received
+      kind: rest
+      description: Receives a seasonal classification run summary and dispatches notifications to all stakeholder groups
+      ordId: "sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_classification-notification-workflow.classificationNotificationReceived:v1"
+    - name: classification_notification_received_mcp_server
+      kind: mcp-server
+      description: MCP server for classification notification received operations
+      ordId: "sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_classification-notification-workflow.classificationNotificationReceivedMcpServer:v1"

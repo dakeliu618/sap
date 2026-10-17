@@ -1,0 +1,220 @@
+{
+  "name": "Classification Notification Workflow",
+  "description": "Receives a seasonal article classification run summary from the Seasonal Article Detector Agent and dispatches role-specific notifications to all configured stakeholder groups (demand planners, category managers, supply chain analysts, store managers) via the SAP Agent.",
+  "nodes": [
+    {
+      "id": "wh-notify-001",
+      "name": "Classification Notification Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "seasonal-article-detector-8a850/classification-notification-workflow/classification-notification-received",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "code-001",
+      "name": "Build Notification Recipients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// STAKEHOLDER_GROUPS: Update with actual recipient email addresses or distribution lists for each role.\n// Replace placeholder addresses before activating this workflow.\nconst STAKEHOLDER_GROUPS = [\n  { role: 'Demand Planner', email: 'demand.planners@example.com', detail_level: 'full' },\n  { role: 'Category Manager', email: 'category.managers@example.com', detail_level: 'summary' },\n  { role: 'Supply Chain Analyst', email: 'sc.analysts@example.com', detail_level: 'full' },\n  { role: 'Store Manager', email: 'store.managers@example.com', detail_level: 'headline' }\n];\n\nconst body = $('Classification Notification Received').first().json.body;\n\nreturn STAKEHOLDER_GROUPS.map(group => ({\n  json: {\n    role: group.role,\n    email: group.email,\n    detail_level: group.detail_level,\n    run_id: body.run_id,\n    run_date: body.run_date,\n    total_classified: body.total_classified,\n    seasonal_count: body.seasonal_count,\n    low_confidence_count: body.low_confidence_count,\n    dashboard_url: body.dashboard_url,\n    top_seasonal_articles: body.top_seasonal_articles || []\n  }\n}));"
+      }
+    },
+    {
+      "id": "agent-001",
+      "name": "Compose Notification Message",
+      "type": "CUSTOM.sapAgent",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "agents": "[{\"ordId\":\"customer.build:agent:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1\",\"name\":\"Seasonal Article Detector Agent\"}]",
+        "agentName": "{\"ordId\":\"customer.build:agent:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1\",\"name\":\"Seasonal Article Detector Agent\"}",
+        "input": "={{ 'Compose a notification message for a ' + $json.role + ' (detail level: ' + $json.detail_level + '). Run ID: ' + $json.run_id + '. Run date: ' + $json.run_date + '. Total articles classified: ' + $json.total_classified + '. Seasonal articles found: ' + $json.seasonal_count + '. Low confidence classifications: ' + $json.low_confidence_count + '. Dashboard URL: ' + $json.dashboard_url + '. Keep the message concise and role-appropriate. For headline level: one sentence + link. For summary level: 2-3 sentences. For full level: include key stats and call to action.' }}",
+        "sessionId": "={{ $json.run_id + '-notify-' + $json.role.replace(/ /g, '-').toLowerCase() }}"
+      }
+    },
+    {
+      "id": "if-001",
+      "name": "Check Notification Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "agg-001",
+      "name": "Aggregate Notification Results",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        940,
+        300
+      ],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "notification_results",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-002",
+      "name": "Build Notification Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst results = items[0]?.json?.notification_results || [];\nconst runId = $('Classification Notification Received').first().json.body.run_id || 'unknown';\nconst notifiedCount = results.filter(r => r.success === true).length;\n\nreturn [{\n  json: {\n    run_id: runId,\n    notified_count: notifiedCount,\n    total_groups: results.length,\n    status: 'completed'\n  }\n}];"
+      }
+    },
+    {
+      "id": "respond-001",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1380,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      }
+    }
+  ],
+  "connections": {
+    "Classification Notification Received": {
+      "main": [
+        [
+          {
+            "node": "Build Notification Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Notification Recipients": {
+      "main": [
+        [
+          {
+            "node": "Compose Notification Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Notification Message": {
+      "main": [
+        [
+          {
+            "node": "Check Notification Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Notification Success": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Notification Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Notification Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Notification Results": {
+      "main": [
+        [
+          {
+            "node": "Build Notification Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Notification Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Compose Notification Message": [
+      {
+        "success": true,
+        "agentName": "Seasonal Article Detector Agent",
+        "ordId": "customer.build:agent:seasonal-article-detector-8a850.seasonal-article-detector-agent:v1",
+        "globalTenantId": null,
+        "messageId": "msg-notify-001",
+        "sessionId": "run-001-notify-demand-planner",
+        "blocking": true,
+        "response": "New seasonal article classifications are available. 340 articles classified as seasonal across your planning scope. 45 low-confidence classifications require your review. View the full results in the dashboard: https://dashboard.example.com/seasonal-articles?run=run-001",
+        "timestamp": "2026-10-07T14:05:00.000Z"
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

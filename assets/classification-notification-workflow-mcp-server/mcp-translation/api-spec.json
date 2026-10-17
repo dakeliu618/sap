@@ -1,0 +1,98 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Classification Notification Received",
+    "description": "Webhook endpoint for workflow tenant: classification-notification-workflow\n\n**Workflow:** classification-notification-workflow\n\nThis webhook accepts multiple HTTP methods. The request body/query parameters\nare passed as input to the n8n workflow execution.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Managed n8n Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://your-n8n-workflow-tenant.example.com",
+      "description": "Workflow tenant webhook base URL"
+    }
+  ],
+  "tags": [
+    {
+      "name": "classification-notification-workflow",
+      "description": "Webhooks for workflow: classification-notification-workflow"
+    }
+  ],
+  "paths": {
+    "/seasonal-article-detector-8a850/classification-notification-workflow/classification-notification-received": {
+      "post": {
+        "summary": "POST Classification Notification Received",
+        "description": "POST endpoint for webhook: seasonal-article-detector-8a850/classification-notification-workflow/classification-notification-received\n\nWorkflow: classification-notification-workflow",
+        "operationId": "postSeasonalArticleDetector8a850ClassificationNotificationWorkflowClassificationNotificationReceivedUsingPOST",
+        "tags": [
+          "classification-notification-workflow"
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Response from workflow execution"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token"
+          },
+          "403": {
+            "description": "Forbidden - Token audience mismatch or invalid issuer"
+          },
+          "500": {
+            "description": "Internal Server Error - Workflow execution failed"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Webhook payload - passed to workflow as input",
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "JSON payload for the workflow"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token with correct issuer and audience for this workflow tenant. Token is validated by Istio RequestAuthentication."
+      }
+    }
+  }
+}

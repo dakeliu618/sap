@@ -1,0 +1,21 @@
+apiVersion: asset.sap/v1
+kind: Asset
+type: mcp-server
+
+metadata:
+  name: replenishment-adjustment-workflow-mcp-server
+  version: "1.0.0"
+  translation: mcp-translation/translation.json
+  apiSpec: mcp-translation/api-spec.json
+
+requires:
+  - name: replenishment_adjustment_received
+    kind: api
+    ordId: sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_replenishment-adjustment-workflow.replenishmentAdjustmentReceived:v1
+
+provides:
+  apis:
+    - name: replenishment-adjustment-received-mcp-server
+      kind: mcp-server
+      description: MCP server for replenishment adjustment webhook operations
+      ordId: sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_replenishment-adjustment-workflow.replenishmentAdjustmentReceived_mcp:v1

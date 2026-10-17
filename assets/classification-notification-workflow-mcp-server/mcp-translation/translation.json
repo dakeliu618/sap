@@ -1,0 +1,64 @@
+{
+  "mcpTranslationVersion": "0.6",
+  "target": {
+    "ordId": "sap.n8nwfrt:apiResource:seasonal-article-detector-8a850_classification-notification-workflow.classificationNotificationReceived:v1",
+    "type": "openapi-v3"
+  },
+  "serverInfo": {
+    "name": "sap.mcp/classification_notification_received",
+    "title": "classification_notification_received",
+    "version": "1.0.0",
+    "description": "MCP server for the classification_notification_received service."
+  },
+  "tools": [
+    {
+      "name": "postClassificationNotificationReceived",
+      "title": "postSeasonalArticleDetector8a850ClassificationNotificationWorkflowClassificationNotificationReceivedUsingPOST",
+      "description": "POST endpoint for webhook: seasonal-article-detector-8a850/classification-notification-workflow/classification-notification-received\n\nWorkflow: classification-notification-workflow",
+      "openApiType": {
+        "operationId": "postSeasonalArticleDetector8a850ClassificationNotificationWorkflowClassificationNotificationReceivedUsingPOST",
+        "parameters": [
+          {
+            "name": "body",
+            "description": "Webhook payload - passed to workflow as input"
+          }
+        ],
+        "requestBody": {
+          "contentType": "application/json"
+        },
+        "responseHeaders": [
+          {
+            "name": "age"
+          },
+          {
+            "name": "cache-control"
+          },
+          {
+            "name": "expires"
+          },
+          {
+            "name": "last-modified"
+          },
+          {
+            "name": "x-request-id"
+          },
+          {
+            "name": "x-correlation-id"
+          },
+          {
+            "name": "content-type"
+          },
+          {
+            "name": "content-encoding"
+          },
+          {
+            "name": "content-language"
+          },
+          {
+            "name": "content-length"
+          }
+        ]
+      }
+    }
+  ]
+}

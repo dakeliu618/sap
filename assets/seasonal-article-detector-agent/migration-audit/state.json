@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "agent_dir": "assets/seasonal-article-detector-agent",
+  "state": {
+    "selected_systems": [
+      {"id": "car_hana", "destination": "CAR_HANA", "proxy_type": "OnPremise"},
+      {"id": "replenishment_workflow", "destination": "REPLENISHMENT_WORKFLOW", "proxy_type": "Internet"},
+      {"id": "classification_notification", "destination": "CLASSIFICATION_NOTIFICATION_WORKFLOW", "proxy_type": "Internet"},
+      {"id": "aicore", "destination": "aicore", "proxy_type": "Internet"}
+    ],
+    "aicore_destination_name": "aicore",
+    "llm_model_name": "gpt-4o",
+    "runtime_mode": "dual-mode",
+    "client_strategy": "per-system",
+    "file_disposition": {
+      "app/n8n_client.py": "created",
+      "app/aicore.py": "created",
+      "app/agent.py": "edited",
+      "app/agent_executor.py": "edited",
+      "app/main.py": "edited",
+      "app/tools.py": "edited",
+      "requirements.txt": "edited",
+      "requirements-joule.txt": "created",
+      "manifest.yml": "created",
+      "Procfile": "created",
+      "runtime.txt": "created",
+      ".cfignore": "created",
+      ".pylintrc": "created",
+      "tests/_helpers.py": "created",
+      "tests/test_n8n_client.py": "created",
+      "tests/test_workflow_tools.py": "created",
+      "tests/test_integration.py": "edited",
+      "asset.yaml": "kept-cfignored",
+      "solution.yaml": "kept-cfignored",
+      "assets/replenishment-adjustment-workflow-mcp-server/": "kept-cfignored",
+      "assets/classification-notification-workflow-mcp-server/": "kept-cfignored",
+      "app/mcp_providers/agw.py": "kept-gated",
+      "mcp-mock.json": "kept"
+    },
+    "deployment": null
+  },
+  "audit_trail": [
+    {"ts": "2026-10-09T13:27:00Z", "phase": "0.1", "kind": "autonomous_decision", "value": "agent_dir = assets/seasonal-article-detector-agent"},
+    {"ts": "2026-10-09T13:28:00Z", "phase": "2.2", "kind": "user_answer", "value": "selected systems: car_hana(CAR_HANA/OnPremise), replenishment_workflow(REPLENISHMENT_WORKFLOW), classification_notification(CLASSIFICATION_NOTIFICATION_WORKFLOW), aicore(aicore); model=gpt-4o"},
+    {"ts": "2026-10-09T13:28:30Z", "phase": "2.3", "kind": "autonomous_decision", "value": "client_strategy = per-system (car_hana via CAP REST; n8n shared for both workflow webhooks)"},
+    {"ts": "2026-10-09T13:35:00Z", "phase": "3.5", "kind": "autonomous_decision", "value": "runtime_mode = dual-mode (default)"},
+    {"ts": "2026-10-09T13:36:00Z", "phase": "3.5", "kind": "file_op", "value": "mcp artefacts: gated (dual-mode) — 5 items: mcp_providers/agw.py kept-gated, mcp-mock.json kept, assets/*-mcp-server/ kept-cfignored, solution.yaml kept-cfignored, asset.yaml kept-cfignored"},
+    {"ts": "2026-10-09T13:37:00Z", "phase": "4.4", "kind": "file_op", "value": "requirements: split=true; sap-ai-sdk-gen=6.6.0; gunicorn~=22.0; uvicorn[standard]~=0.30"},
+    {"ts": "2026-10-09T13:38:00Z", "phase": "4.7", "kind": "file_op", "value": "joule artefacts: kept-cfignored — asset.yaml, solution.yaml, assets/*-mcp-server/"},
+    {"ts": "2026-10-09T13:45:00Z", "phase": "5.5", "kind": "autonomous_decision", "value": "tests passed: 139 | coverage: 70%"}
+  ]
+}

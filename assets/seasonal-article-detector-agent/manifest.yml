@@ -1,0 +1,36 @@
+---
+# CF manifest for seasonal-article-detector-agent.
+# The default route is assigned automatically as
+#   seasonal-article-detector-agent.<default-shared-domain>
+# Override `routes:` only if you need a custom hostname.
+applications:
+  - name: seasonal-article-detector-agent
+    memory: 512M
+    disk_quota: 1G
+    instances: 1
+    buildpacks:
+      - python_buildpack
+    command: gunicorn --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:${PORT} --chdir app main:application
+    timeout: 180
+    health-check-type: http
+    health-check-http-endpoint: /.well-known/agent.json
+    services:
+      - proj-vector-destination-service
+      - proj-vector-connectivity-service
+    env:
+      # ── AI Core ──────────────────────────────────────────────────────────
+      AICORE_DESTINATION_NAME: aicore
+      AGENT_LLM_MODEL: gpt-4o
+      # ── CAR HANA (via CAP backend proxy) ─────────────────────────────────
+      # Set this to the deployed URL of the seasonal-detector-cap CAP app:
+      # e.g. https://seasonal-detector-cap.cfapps.<region>.hana.ondemand.com/api/timeseries
+      CAP_TIMESERIES_URL: ""
+      # ── n8n workflow destinations ─────────────────────────────────────────
+      REPLENISHMENT_WORKFLOW_DESTINATION_NAME: REPLENISHMENT_WORKFLOW
+      CLASSIFICATION_NOTIFICATION_WORKFLOW_DESTINATION_NAME: CLASSIFICATION_NOTIFICATION_WORKFLOW
+      # ── Detection thresholds (tunable without redeploy) ──────────────────
+      SEASONAL_STRENGTH_THRESHOLD: "0.3"
+      MIN_CONFIDENCE_THRESHOLD: "60.0"
+      MIN_DATA_YEARS: "2"
+      # ── Logging ──────────────────────────────────────────────────────────
+      LOG_LEVEL: INFO

@@ -1,0 +1,12 @@
+[MASTER]
+# Suppress import errors for packages that are runtime-only on specific platforms.
+# - gen_ai_hub, sap-ai-sdk-gen: CF-only (not installed in Joule test env)
+# - litellm, langchain_litellm, sap_cloud_sdk: Joule-only (not installed in CF env)
+# Both sets are correctly gated by try/except ImportError in the source code.
+extension-pkg-whitelist=
+
+[MESSAGES CONTROL]
+disable=E0401
+
+[FORMAT]
+max-line-length=120

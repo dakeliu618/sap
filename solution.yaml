@@ -1,0 +1,14 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: seasonal-article-detector-8a850
+  version: "1.0.0"
+  description: "AI agent that detects strongly seasonal articles from historical article/store sales time-series data in SAP CAR/CARAB, surfaces results in a dashboard, triggers replenishment workflow adjustments, and sends notifications to demand planners and merchandise managers."
+
+assets:
+  - ref: ./assets/seasonal-article-detector-agent/asset.yaml
+  - ref: ./assets/workflows/replenishment-adjustment-workflow/asset.yaml
+  - ref: ./assets/workflows/classification-notification-workflow/asset.yaml
+  - ref: ./assets/replenishment-adjustment-workflow-mcp-server/asset.yaml
+  - ref: ./assets/classification-notification-workflow-mcp-server/asset.yaml

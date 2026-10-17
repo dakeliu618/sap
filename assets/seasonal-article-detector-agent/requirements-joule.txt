@@ -1,0 +1,29 @@
+# Joule / Kyma requirements — used by the Joule build descriptor.
+# Point your Joule build config at this file instead of requirements.txt.
+# sap-ai-sdk-gen is intentionally excluded here: it conflicts with litellm's
+# click==8.1.8 pin. On Joule, set_aicore_config() + langchain_litellm handles LLM init.
+
+# ── Joule-only packages ──────────────────────────────────────────────────────
+litellm==1.91.1
+langchain-litellm==0.7.1
+sap-cloud-sdk==0.57.2
+click==8.1.8
+
+# ── Everything else from requirements.txt except sap-ai-sdk-gen, gunicorn,
+#    uvicorn[standard] (not needed on Joule / Kyma) ──────────────────────────
+langchain==1.3.10
+langchain-core==1.6.1
+langchain-mcp-adapters==0.2.2
+langgraph==1.2.6
+a2a-sdk[all]==0.3.22
+fastapi==0.141.1
+uvicorn==0.40.0
+httpx==0.28.1
+python-dotenv==1.2.2
+PyYAML==6.0.3
+sqlalchemy==2.0.36
+google-re2==1.1.20251105
+statsmodels==0.14.4
+numpy==2.2.6
+opentelemetry-instrumentation-starlette
+mcp>=1.0.0

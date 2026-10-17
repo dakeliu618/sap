@@ -1,0 +1,49 @@
+apiVersion: asset.sap/v1
+kind: Asset
+type: application
+
+metadata:
+  name: seasonal-detector-cap
+  version: "1.0.0"
+  description: "CAP backend — proxies CAR HANA on-premise time-series data via BTP Connectivity and persists classification results"
+
+container:
+  buildPath: .
+  port: 4004
+
+provides:
+  apis:
+    - name: timeseries-api
+      kind: rest
+      description: "OData/REST endpoint for reading CAR time-series and writing classification results"
+
+requires:
+  - name: seasonal-detector-hana
+    kind: platform-service
+    service: hana
+    plan: hdi-shared
+
+  - name: seasonal-detector-connectivity
+    kind: platform-service
+    service: connectivity
+    plan: lite
+
+  - name: seasonal-detector-destination
+    kind: platform-service
+    service: destination
+    plan: lite
+
+  - name: seasonal-detector-xsuaa
+    kind: platform-service
+    service: xsuaa
+    plan: application
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 20
+    periodSeconds: 30
+  readiness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 10

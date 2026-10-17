@@ -1,0 +1,51 @@
+[
+  {
+    "name": "postClassificationNotificationReceived",
+    "title": "postSeasonalArticleDetector8a850ClassificationNotificationWorkflowClassificationNotificationReceivedUsingPOST",
+    "description": "POST endpoint for webhook: seasonal-article-detector-8a850/classification-notification-workflow/classification-notification-received\n\nWorkflow: classification-notification-workflow",
+    "openApiType": {
+      "operationId": "postSeasonalArticleDetector8a850ClassificationNotificationWorkflowClassificationNotificationReceivedUsingPOST",
+      "parameters": [
+        {
+          "name": "body",
+          "description": "Webhook payload - passed to workflow as input"
+        }
+      ],
+      "requestBody": {
+        "contentType": "application/json"
+      },
+      "responseHeaders": [
+        {
+          "name": "age"
+        },
+        {
+          "name": "cache-control"
+        },
+        {
+          "name": "expires"
+        },
+        {
+          "name": "last-modified"
+        },
+        {
+          "name": "x-request-id"
+        },
+        {
+          "name": "x-correlation-id"
+        },
+        {
+          "name": "content-type"
+        },
+        {
+          "name": "content-encoding"
+        },
+        {
+          "name": "content-language"
+        },
+        {
+          "name": "content-length"
+        }
+      ]
+    }
+  }
+]
