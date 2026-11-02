@@ -425,16 +425,68 @@ def persist_classifications(
     Returns:
         Persistence confirmation with run_id and record_count
     """
+    import urllib.request
+    import json as _json
+
+    cap_url = os.environ.get("CAP_CLASSIFICATIONS_URL", "")
     record_count = len(classifications)
-    logger.info(
-        "M3.achieved: Dashboard published — %d classification records available; run_id=%s",
-        record_count, run_id,
-    )
-    return {
-        "run_id": run_id,
-        "record_count": record_count,
-        "status": "persisted",
+
+    if not cap_url:
+        logger.info(
+            "M3.achieved: Dashboard published (preview) — %d classification records; run_id=%s",
+            record_count, run_id,
+        )
+        return {"run_id": run_id, "record_count": record_count, "status": "persisted"}
+
+    def _post(path, body):
+        data = _json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            url=f"{cap_url.rstrip('/')}/{path}",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return _json.loads(resp.read().decode("utf-8"))
+
+    run = {
+        "ID": run_id,
+        "status": "COMPLETED",
+        "startedAt": run_metadata.get("start_time"),
+        "completedAt": run_metadata.get("end_time"),
+        "totalProcessed": run_metadata.get("total_processed", record_count),
+        "coveragePct": run_metadata.get("coverage_pct", 0),
+        "seasonalCount": sum(1 for c in classifications if c.get("classification") == "SEASONAL"),
+        "nonSeasonalCount": sum(1 for c in classifications if c.get("classification") == "NON_SEASONAL"),
+        "insufficientDataCount": sum(1 for c in classifications if c.get("classification") == "INSUFFICIENT_DATA"),
+        "lowConfidenceCount": sum(1 for c in classifications if c.get("classification") == "LOW_CONFIDENCE_SEASONAL"),
     }
+
+    try:
+        _post("upsertRun", {"run": run})
+        _post("saveResults", {"runId": run_id, "results": [
+            {
+                "articleId": c.get("article_id"),
+                "storeId": c.get("store_id"),
+                "classification": c.get("classification"),
+                "confidenceScore": c.get("confidence_score"),
+                "seasonStartWeek": c.get("season_start_week"),
+                "seasonEndWeek": c.get("season_end_week"),
+                "seasonalStrengthIndex": c.get("seasonal_strength_index"),
+                "algorithmUsed": c.get("algorithm_used", "stl"),
+                "dataRangeStart": c.get("data_range_start"),
+                "dataRangeEnd": c.get("data_range_end"),
+            }
+            for c in classifications
+        ]})
+        logger.info(
+            "M3.achieved: Dashboard published — %d classification records persisted; run_id=%s",
+            record_count, run_id,
+        )
+        return {"run_id": run_id, "record_count": record_count, "status": "persisted"}
+    except Exception as exc:  # noqa: BLE001
+        logger.error("M3.missed: Persistence failed — %s; run_id=%s", exc, run_id)
+        return {"run_id": run_id, "record_count": 0, "status": "failed", "error": str(exc)}
 
 
 @tool
@@ -444,13 +496,35 @@ def get_classification_results(
     """Retrieves current classification results from the CAP backend, with optional filters.
 
     Args:
-        filters: Optional dict with keys: classification (str), min_confidence (float),
-                 article_id (str), store_id (str), category (str)
+    import urllib.request
+    import json as _json
 
-    Returns:
-        List of classification records matching the filters
-    """
-    return []
+    cap_url = os.environ.get("CAP_CLASSIFICATIONS_URL", "")
+    if not cap_url:
+        return []
+
+    f = filters or {}
+    payload = _json.dumps({
+        "runId":          f.get("run_id"),
+        "classification": f.get("classification"),
+        "minConfidence":  f.get("min_confidence"),
+        "articleId":      f.get("article_id"),
+        "storeId":        f.get("store_id"),
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        url=f"{cap_url.rstrip('/')}/getResults",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = _json.loads(resp.read().decode("utf-8"))
+            return body.get("value", body) if isinstance(body, dict) else body
+    except Exception as exc:  # noqa: BLE001
+        logger.error("get_classification_results failed: %s", exc)
+        return []
 
 
 @tool
@@ -463,14 +537,55 @@ def get_run_status(run_id: str | None = None) -> dict[str, Any]:
     Returns:
         Run metadata including coverage_pct, counts by classification type, duration, errors
     """
+    import urllib.request
+    import json as _json
+
+    cap_url = os.environ.get("CAP_CLASSIFICATIONS_URL", "")
+    if not cap_url:
+        return {
+            "run_id": run_id or "latest",
+            "status": "no_runs_found",
+            "total_processed": 0,
+            "seasonal_count": 0,
+            "non_seasonal_count": 0,
+            "insufficient_data_count": 0,
+            "coverage_pct": 0.0,
+        }
+
+    payload = _json.dumps({"runId": run_id}).encode("utf-8")
+    req = urllib.request.Request(
+        url=f"{cap_url.rstrip('/')}/getRun",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = _json.loads(resp.read().decode("utf-8"))
+            run = body.get("value", body) if isinstance(body, dict) else body
+    except Exception as exc:  # noqa: BLE001
+        logger.error("get_run_status failed: %s", exc)
+        return {"run_id": run_id or "latest", "status": "error", "error": str(exc),
+                "total_processed": 0, "seasonal_count": 0, "non_seasonal_count": 0,
+                "insufficient_data_count": 0, "coverage_pct": 0.0}
+
+    if not run:
+        return {"run_id": run_id or "latest", "status": "no_runs_found",
+                "total_processed": 0, "seasonal_count": 0, "non_seasonal_count": 0,
+                "insufficient_data_count": 0, "coverage_pct": 0.0}
+
     return {
-        "run_id": run_id or "latest",
-        "status": "no_runs_found",
-        "total_processed": 0,
-        "seasonal_count": 0,
-        "non_seasonal_count": 0,
-        "insufficient_data_count": 0,
-        "coverage_pct": 0.0,
+        "run_id":                  run.get("ID"),
+        "status":                  run.get("status", "unknown"),
+        "total_processed":         run.get("totalProcessed", 0),
+        "seasonal_count":          run.get("seasonalCount", 0),
+        "non_seasonal_count":      run.get("nonSeasonalCount", 0),
+        "insufficient_data_count": run.get("insufficientDataCount", 0),
+        "low_confidence_count":    run.get("lowConfidenceCount", 0),
+        "coverage_pct":            float(run.get("coveragePct", 0)),
+        "started_at":              run.get("startedAt"),
+        "completed_at":            run.get("completedAt"),
+        "error_detail":            run.get("errorDetail"),
     }
 
 

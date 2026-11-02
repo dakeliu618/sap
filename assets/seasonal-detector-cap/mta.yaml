@@ -1,0 +1,49 @@
+_schema-version: '3.1'
+ID: seasonal-detector-cap
+version: 1.0.0
+description: CAP backend for Seasonal Article Detector — proxies on-premise CAR HANA
+             and stores classification results via Cloud Connector
+
+modules:
+
+  - name: seasonal-detector-cap-srv
+    type: nodejs
+    path: .
+    parameters:
+      memory:     256M
+      disk-quota: 512M
+    build-parameters:
+      builder: npm
+      ignore:
+        - node_modules/
+        - .env
+        - .cdsrc.json
+    requires:
+      - name: seasonal-detector-connectivity
+      - name: seasonal-detector-destination
+      - name: seasonal-detector-xsuaa
+    provides:
+      - name: seasonal-detector-cap-api
+        properties:
+          url: ${default-url}
+
+resources:
+
+  - name: seasonal-detector-connectivity
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service:      connectivity
+      service-plan: lite
+
+  - name: seasonal-detector-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service:      destination
+      service-plan: lite
+
+  - name: seasonal-detector-xsuaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service:      xsuaa
+      service-plan: application
+      path:         ./xs-security.json

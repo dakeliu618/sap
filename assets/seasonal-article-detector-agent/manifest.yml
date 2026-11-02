@@ -25,6 +25,9 @@ applications:
       # Set this to the deployed URL of the seasonal-detector-cap CAP app:
       # e.g. https://seasonal-detector-cap.cfapps.<region>.hana.ondemand.com/api/timeseries
       CAP_TIMESERIES_URL: ""
+      # Set this to the deployed CAP backend URL + /api/classifications
+      # e.g. https://seasonal-detector-cap.cfapps.<region>.hana.ondemand.com/api/classifications
+      CAP_CLASSIFICATIONS_URL: ""
       # ── n8n workflow destinations ─────────────────────────────────────────
       REPLENISHMENT_WORKFLOW_DESTINATION_NAME: REPLENISHMENT_WORKFLOW
       CLASSIFICATION_NOTIFICATION_WORKFLOW_DESTINATION_NAME: CLASSIFICATION_NOTIFICATION_WORKFLOW

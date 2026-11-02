@@ -1,0 +1,7 @@
+{
+  "xsappname": "seasonal-detector-cap",
+  "tenant-mode": "dedicated",
+  "description": "UAA configuration for seasonal-detector-cap CAP backend",
+  "scopes": [],
+  "role-templates": []
+}

@@ -1,7 +1,7 @@
 {
   "name": "seasonal-detector-cap",
   "version": "1.0.0",
-  "description": "CAP backend for Seasonal Article Detector — proxies CAR HANA time-series data and persists classification results",
+  "description": "CAP backend for Seasonal Article Detector — proxies on-premise CAR HANA via Cloud Connector",
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "cds-serve",
@@ -12,24 +12,9 @@
     "@sap/hana-client": "^2",
     "express": "^4",
     "node-fetch": "^3",
-    "sap-hdbext-promisfied": "^1"
-  },
-  "devDependencies": {
-    "@cap-js/sqlite": "^1"
+    "socks-proxy-agent": "^8"
   },
   "cds": {
-    "requires": {
-      "db": {
-        "kind": "hana-cloud"
-      },
-      "connectivity": true,
-      "destinations": true,
-      "CAR_HANA": {
-        "kind": "hana",
-        "[production]": {
-          "vcap": { "label": "destination" }
-        }
-      }
-    }
+    "requires": {}
   }
 }

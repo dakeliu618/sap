@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAP Seasonal Article Detector Agent — Customer Deployment Guide</title>
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; max-width: 900px; margin: 40px auto; padding: 0 30px; line-height: 1.5; }
+  h1 { font-size: 20pt; color: #003366; border-bottom: 3px solid #003366; padding-bottom: 8px; margin-top: 40px; }
+  h2 { font-size: 15pt; color: #003366; border-bottom: 1px solid #cccccc; padding-bottom: 4px; margin-top: 32px; }
+  h3 { font-size: 12pt; color: #005580; margin-top: 20px; }
+  h4 { font-size: 11pt; color: #333; margin-top: 14px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt; }
+  th { background: #003366; color: white; padding: 7px 10px; text-align: left; }
+  td { border: 1px solid #cccccc; padding: 6px 10px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f5f8fc; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; background: #f0f4f8; padding: 1px 4px; border-radius: 2px; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; background: #f0f4f8; border-left: 3px solid #003366; padding: 10px 14px; margin: 8px 0; white-space: pre-wrap; word-break: break-word; }
+  .warn  { background: #fff8e1; border-left: 4px solid #f9a825; padding: 8px 12px; margin: 10px 0; }
+  .info  { background: #e8f4fd; border-left: 4px solid #0277bd; padding: 8px 12px; margin: 10px 0; }
+  .ok    { background: #e8f5e9; border-left: 4px solid #2e7d32; padding: 8px 12px; margin: 10px 0; }
+  .check { color: #2e7d32; font-weight: bold; }
+  ul, ol { margin: 6px 0 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  .toc a { color: #003366; text-decoration: none; }
+  .toc li { margin: 4px 0; }
+  .page-break { page-break-before: always; }
+  .title-block { text-align: center; padding: 40px 0 20px 0; border-bottom: 2px solid #003366; margin-bottom: 30px; }
+  .title-block h1 { border: none; font-size: 24pt; }
+  .title-block .sub { font-size: 12pt; color: #555; margin-top: 6px; }
+  .badge { display: inline-block; background: #003366; color: white; font-size: 8.5pt; padding: 2px 8px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+  .badge-warn { background: #f9a825; color: #222; }
+</style>
+</head>
+<body>
+
+<div class="title-block">
+  <h1>SAP Seasonal Article Detector Agent</h1>
+  <div class="sub">Customer Deployment Guide &nbsp;|&nbsp; Version 1.0</div>
+  <div class="sub" style="margin-top:10px; font-size:10pt; color:#888;">Confidential — for authorized deployment personnel only</div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<h2>Table of Contents</h2>
+<ol class="toc">
+  <li><a href="#overview">Overview &amp; Architecture</a></li>
+  <li><a href="#prerequisites">Prerequisites Checklist</a></li>
+  <li><a href="#btp-setup">BTP Subaccount &amp; Service Setup</a></li>
+  <li><a href="#cloud-connector">Cloud Connector Configuration</a></li>
+  <li><a href="#hana-setup">On-Premise HANA Database Setup</a></li>
+  <li><a href="#deploy-cap">Deploy CAP Backend</a></li>
+  <li><a href="#deploy-agent">Configure &amp; Deploy the Agent</a></li>
+  <li><a href="#verification">Post-Deployment Verification</a></li>
+  <li><a href="#troubleshooting">Troubleshooting Guide</a></li>
+  <li><a href="#reference">Reference: All Environment Variables</a></li>
+</ol>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h1 id="overview">1. Overview &amp; Architecture</h1>
+
+<p>The <strong>Seasonal Article Detector Agent</strong> is an AI-powered agent that automatically classifies articles as seasonal or non-seasonal using historical sales time-series data from SAP CAR/CARAB. It runs on SAP BTP Cloud Foundry and connects to your on-premise HANA database through SAP Cloud Connector.</p>
+
+<h3>Component Map</h3>
+<pre>
+┌─────────────────────────────────────────────────────────┐
+│                   SAP BTP Cloud Foundry                 │
+│                                                         │
+│  ┌────────────────────┐   ┌──────────────────────────┐  │
+│  │  seasonal-article  │──▶│  seasonal-detector-cap   │  │
+│  │  -detector-agent   │   │   (Node.js CAP backend)  │  │
+│  │  (Python A2A)      │   └──────────┬───────────────┘  │
+│  └────────────────────┘              │                  │
+│                                      │ BTP Connectivity │
+│                                      │ Service (SOCKS5) │
+└──────────────────────────────────────┼──────────────────┘
+                                       │
+                             ┌─────────▼──────────┐
+                             │  SAP Cloud          │
+                             │  Connector          │
+                             │  (on-premise)       │
+                             └─────────┬──────────┘
+                                       │
+                             ┌─────────▼──────────┐
+                             │  On-Premise HANA    │
+                             │                     │
+                             │  /DMF/TS_PS  (read) │
+                             │  ZSEASONAL_CLASS_RUN │
+                             │  ZSEASONAL_CLASS_    │
+                             │  RESULT     (write) │
+                             └────────────────────┘
+</pre>
+
+<h3>What Gets Deployed</h3>
+<table>
+  <tr><th>Component</th><th>Technology</th><th>Location</th></tr>
+  <tr><td>seasonal-detector-cap</td><td>Node.js CAP (port 4004)</td><td>BTP CF</td></tr>
+  <tr><td>seasonal-article-detector-agent</td><td>Python A2A (port 5000)</td><td>BTP CF</td></tr>
+  <tr><td>Replenishment workflow</td><td>n8n</td><td>Joule Studio / n8n</td></tr>
+  <tr><td>Classification notification workflow</td><td>n8n</td><td>Joule Studio / n8n</td></tr>
+</table>
+
+<div class="info"><strong>No credentials are stored in the git repository.</strong> The HANA user/password is entered only in the BTP Destination configuration (Step 3.4) and never touches the code.</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="prerequisites">2. Prerequisites Checklist</h1>
+<p>Verify all items below before starting deployment. Each item links to the section where it is configured.</p>
+
+<h3>2.1 Infrastructure Access</h3>
+<table>
+  <tr><th width="5%">#</th><th width="55%">Requirement</th><th width="20%">Verified by</th><th width="20%">Notes</th></tr>
+  <tr><td>☐</td><td>SAP BTP global account with Cloud Foundry environment enabled</td><td>BTP Admin</td><td></td></tr>
+  <tr><td>☐</td><td>BTP subaccount with Cloud Foundry org and space created</td><td>BTP Admin</td><td>Any region (e.g. eu10, us10)</td></tr>
+  <tr><td>☐</td><td>BTP subaccount admin role (to create service instances)</td><td>Deploying user</td><td></td></tr>
+  <tr><td>☐</td><td>CF Space Developer role in target space</td><td>Deploying user</td><td></td></tr>
+  <tr><td>☐</td><td>Access to on-premise HANA (CAR system) network</td><td>Network/Basis team</td><td>HANA port 30015 must be reachable from Cloud Connector host</td></tr>
+  <tr><td>☐</td><td>HANA technical user credentials for CAR DB</td><td>DBA</td><td>Needs SELECT on /DMF/TS_PS; SELECT/INSERT/UPDATE on Z-tables</td></tr>
+</table>
+
+<h3>2.2 BTP Service Entitlements</h3>
+<p>In <strong>BTP Cockpit → Global Account → Entitlements → Service Assignments</strong>, confirm the following are assigned to your subaccount:</p>
+<table>
+  <tr><th>BTP Service</th><th>Plan Required</th><th>Purpose</th></tr>
+  <tr><td>Connectivity</td><td>lite</td><td>SOCKS5 tunnel to on-premise HANA via Cloud Connector</td></tr>
+  <tr><td>Destination</td><td>lite</td><td>Stores HANA credentials and n8n webhook URLs</td></tr>
+  <tr><td>Authorization &amp; Trust Management (XSUAA)</td><td>application</td><td>CAP app authentication</td></tr>
+  <tr><td>SAP AI Core</td><td>extended</td><td>LLM access (required for GPT-4o)</td></tr>
+</table>
+<div class="warn"><strong>Important:</strong> SAP HANA Cloud is <strong>NOT required</strong>. Classification results are stored in the on-premise HANA — no cloud database is needed.</div>
+
+<h3>2.3 Local Tooling (on the deployment machine)</h3>
+<table>
+  <tr><th>Tool</th><th>Version</th><th>Install</th></tr>
+  <tr><td>Node.js</td><td>&ge; 20</td><td><code>https://nodejs.org</code></td></tr>
+  <tr><td>npm</td><td>&ge; 10</td><td>Included with Node.js</td></tr>
+  <tr><td>CF CLI</td><td>&ge; 8</td><td><code>https://github.com/cloudfoundry/cli/releases</code></td></tr>
+  <tr><td>MBT (SAP Multi-target Build Tool)</td><td>&ge; 1.2</td><td><code>npm install -g mbt</code></td></tr>
+  <tr><td>Git</td><td>Any</td><td><code>https://git-scm.com</code></td></tr>
+</table>
+
+<h3>2.4 SAP AI Core Setup</h3>
+<table>
+  <tr><th>#</th><th>Requirement</th></tr>
+  <tr><td>☐</td><td>SAP AI Core instance created in your BTP subaccount</td></tr>
+  <tr><td>☐</td><td>Service key created for SAP AI Core instance (contains clientid, clientsecret, url, tokenServiceURL)</td></tr>
+  <tr><td>☐</td><td>GPT-4o model deployed in SAP AI Core (or compatible model — see Reference section)</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="btp-setup">3. BTP Subaccount &amp; Service Setup</h1>
+
+<h2>3.1 Create Service Instances</h2>
+<p>In <strong>BTP Cockpit → Cloud Foundry → Spaces → [your space] → Services → Service Instances</strong>, create the following four instances.</p>
+<div class="info">Alternatively, the <code>mta.yaml</code> in the CAP backend automatically provisions items 1–3 when you run <code>cf deploy</code> in Step 6. You may skip creating those manually if using MTA deployment.</div>
+
+<table>
+  <tr><th>Instance Name</th><th>Service</th><th>Plan</th><th>Created by</th></tr>
+  <tr><td><code>seasonal-detector-connectivity</code></td><td>connectivity</td><td>lite</td><td>mta.yaml (auto) or manual</td></tr>
+  <tr><td><code>seasonal-detector-destination</code></td><td>destination</td><td>lite</td><td>mta.yaml (auto) or manual</td></tr>
+  <tr><td><code>seasonal-detector-xsuaa</code></td><td>xsuaa</td><td>application</td><td>mta.yaml (auto) or manual</td></tr>
+  <tr><td><code>proj-vector-destination-service</code></td><td>destination</td><td>lite</td><td><strong>Manual — for the Agent app</strong></td></tr>
+  <tr><td><code>proj-vector-connectivity-service</code></td><td>connectivity</td><td>lite</td><td><strong>Manual — for the Agent app</strong></td></tr>
+</table>
+
+<div class="warn"><strong>Note on names:</strong> The agent's <code>manifest.yml</code> expects exactly <code>proj-vector-destination-service</code> and <code>proj-vector-connectivity-service</code>. The CAP backend uses <code>seasonal-detector-*</code> names. These can be the same physical service instances if you prefer — just create one of each and add both names as aliases, or create separate instances.</div>
+
+<h2>3.2 Configure Cloud Connector — Subaccount Mapping</h2>
+<p>Before creating destinations, your Cloud Connector must be connected to this BTP subaccount. See Section 4 for the full Cloud Connector setup.</p>
+
+<h2>3.3 Create BTP Destination: <code>CAR_HANA</code></h2>
+<p>In <strong>BTP Cockpit → Connectivity → Destinations → New Destination</strong>:</p>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Name</td><td><code>CAR_HANA</code></td></tr>
+  <tr><td>Type</td><td>HANA</td></tr>
+  <tr><td>Description</td><td>On-premise CAR HANA database</td></tr>
+  <tr><td>Proxy Type</td><td><strong>OnPremise</strong></td></tr>
+  <tr><td>Host</td><td><em>Virtual hostname defined in Cloud Connector</em> (e.g. <code>car-hana-virtual</code>)</td></tr>
+  <tr><td>Port</td><td><code>30015</code> (or actual HANA instance port)</td></tr>
+  <tr><td>Authentication</td><td>BasicAuthentication</td></tr>
+  <tr><td>User</td><td><em>HANA technical user (e.g. ZSEASONAL_USER)</em></td></tr>
+  <tr><td>Password</td><td><em>HANA technical user password</em></td></tr>
+</table>
+<p>Add Additional Properties:</p>
+<table>
+  <tr><th>Key</th><th>Value</th></tr>
+  <tr><td>TrustAll</td><td>true</td></tr>
+</table>
+<p>Click <strong>Save</strong>, then <strong>Check Connection</strong> to verify.</p>
+
+<div class="info"><strong>Security tip:</strong> Use a dedicated HANA technical user (e.g. <code>ZSEASONAL_USER</code>) with the minimum required permissions — not a system admin or BASIS user. See Section 5.2 for the required GRANT statements.</div>
+
+<h2>3.4 Create BTP Destination: <code>aicore</code></h2>
+<p>In <strong>BTP Cockpit → Connectivity → Destinations → New Destination</strong>:</p>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Name</td><td><code>aicore</code></td></tr>
+  <tr><td>Type</td><td>HTTP</td></tr>
+  <tr><td>URL</td><td><em>AI Core service key → <code>url</code> field</em></td></tr>
+  <tr><td>Proxy Type</td><td>Internet</td></tr>
+  <tr><td>Authentication</td><td>OAuth2ClientCredentials</td></tr>
+  <tr><td>Client ID</td><td><em>AI Core service key → <code>clientid</code></em></td></tr>
+  <tr><td>Client Secret</td><td><em>AI Core service key → <code>clientsecret</code></em></td></tr>
+  <tr><td>Token Service URL</td><td><em>AI Core service key → <code>tokenServiceURL</code></em></td></tr>
+</table>
+
+<h2>3.5 Create BTP Destinations for n8n Workflows</h2>
+<p>Create two HTTP destinations pointing to your n8n or Joule Studio workflow webhook URLs. Obtain these URLs after the workflows are deployed (Step 7).</p>
+<table>
+  <tr><th>Field</th><th>REPLENISHMENT_WORKFLOW</th><th>CLASSIFICATION_NOTIFICATION_WORKFLOW</th></tr>
+  <tr><td>Name</td><td><code>REPLENISHMENT_WORKFLOW</code></td><td><code>CLASSIFICATION_NOTIFICATION_WORKFLOW</code></td></tr>
+  <tr><td>Type</td><td>HTTP</td><td>HTTP</td></tr>
+  <tr><td>URL</td><td><em>Replenishment webhook URL</em></td><td><em>Notification webhook URL</em></td></tr>
+  <tr><td>Authentication</td><td>NoAuthentication</td><td>NoAuthentication</td></tr>
+  <tr><td>Proxy Type</td><td>Internet</td><td>Internet</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="cloud-connector">4. Cloud Connector Configuration</h1>
+
+<div class="info">SAP Cloud Connector must be installed on a machine <strong>inside your corporate network</strong> that has direct TCP access to the CAR HANA server on port 30015.</div>
+
+<h2>4.1 Install Cloud Connector</h2>
+<ol>
+  <li>Download from <strong>SAP Software Downloads</strong> → search "Cloud Connector"</li>
+  <li>Install on a Windows/Linux host in your on-premise network</li>
+  <li>Access the Cloud Connector Admin UI: <code>https://&lt;host&gt;:8443</code></li>
+  <li>Default credentials: <code>Administrator / manage</code> — <strong>change immediately</strong></li>
+</ol>
+
+<h2>4.2 Connect to BTP Subaccount</h2>
+<ol>
+  <li>In Cloud Connector Admin UI → <strong>Connector → Add Subaccount</strong></li>
+  <li>Enter your BTP subaccount details:</li>
+</ol>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Region</td><td>Your BTP subaccount region (e.g. <code>eu10</code>)</td></tr>
+  <tr><td>Subaccount</td><td>Your BTP subaccount ID (found in BTP Cockpit → Subaccount Overview)</td></tr>
+  <tr><td>Display Name</td><td>Any descriptive name</td></tr>
+  <tr><td>Login Email</td><td>Your BTP user email</td></tr>
+  <tr><td>Password</td><td>Your BTP password</td></tr>
+</table>
+<p>Click <strong>Save</strong>. Status should turn green (Connected).</p>
+
+<h2>4.3 Add On-Premise HANA System Mapping</h2>
+<ol>
+  <li>In Cloud Connector Admin UI → <strong>Cloud To On-Premise → Access Control</strong></li>
+  <li>Click <strong>Add</strong> and fill in:</li>
+</ol>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Back-End Type</td><td>SAP HANA</td></tr>
+  <tr><td>Protocol</td><td>TCP</td></tr>
+  <tr><td>Internal Host</td><td><em>Actual HANA hostname or IP on your network</em></td></tr>
+  <tr><td>Internal Port</td><td><code>30015</code></td></tr>
+  <tr><td>Virtual Host</td><td><code>car-hana-virtual</code> <em>(this is what you enter in the BTP Destination)</em></td></tr>
+  <tr><td>Virtual Port</td><td><code>30015</code></td></tr>
+  <tr><td>Principal Type</td><td>None</td></tr>
+</table>
+<ol start="3">
+  <li>Click <strong>Save</strong></li>
+  <li>Add a Resource: click the new mapping → Resources tab → Add → Path <code>/</code>, check <strong>All Sub-Paths</strong></li>
+  <li>Under <strong>State</strong>, check that the mapping shows a green checkmark</li>
+</ol>
+
+<div class="warn">The Virtual Host value (<code>car-hana-virtual</code>) must match exactly the <strong>Host</strong> field in the BTP Destination <code>CAR_HANA</code> configured in Step 3.3.</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="hana-setup">5. On-Premise HANA Database Setup</h1>
+<p>This section requires a HANA user with <strong>schema object creation privileges</strong> (typically a DBA or the <code>SYSTEM</code> user). Run the steps below in SAP HANA Studio, DBeaver, or HANA cockpit against the CAR HANA instance.</p>
+
+<h2>5.1 Create Custom Tables (run DDL script once)</h2>
+<p>The DDL script is located in the repository at:</p>
+<pre>assets/seasonal-detector-cap/db/ddl.sql</pre>
+<p>Run this script <strong>exactly once</strong> before first deployment. It creates:</p>
+<table>
+  <tr><th>Table Name</th><th>Purpose</th></tr>
+  <tr><td><code>ZSEASONAL_CLASS_RUN</code></td><td>One row per classification run (status, totals, timestamps)</td></tr>
+  <tr><td><code>ZSEASONAL_CLASS_RESULT</code></td><td>One row per article/store classification result</td></tr>
+</table>
+
+<h3>How to run:</h3>
+<pre>-- In HANA Studio: Open SQL Console, paste the contents of ddl.sql, execute.
+-- In hdbsql:
+hdbsql -u SYSTEM -p &lt;password&gt; -n &lt;host&gt;:30015 -I ddl.sql</pre>
+
+<div class="ok">The script is idempotent-safe if run in a fresh schema. Do not re-run on an existing installation — it will fail with "table already exists".</div>
+
+<h2>5.2 Create Technical User &amp; Grant Permissions</h2>
+<p>Create a dedicated HANA user for the agent. Uncomment and adapt the GRANT statements at the bottom of <code>ddl.sql</code>:</p>
+<pre>-- Create the technical user (adjust password policy as required)
+CREATE USER ZSEASONAL_USER PASSWORD "&lt;strong-password&gt;" NO FORCE_FIRST_PASSWORD_CHANGE;
+
+-- Minimum permissions for reading CAR time-series data
+GRANT SELECT ON "/DMF/TS_PS" TO ZSEASONAL_USER;
+
+-- Permissions for writing classification results
+GRANT SELECT, INSERT, UPDATE ON "ZSEASONAL_CLASS_RUN"    TO ZSEASONAL_USER;
+GRANT SELECT, INSERT         ON "ZSEASONAL_CLASS_RESULT" TO ZSEASONAL_USER;</pre>
+
+<div class="warn">The <code>/DMF/TS_PS</code> table uses SAP namespace naming. Ensure it exists in the target schema and that your user has SELECT granted on the correct schema. Verify the MANDT (client) value — the code defaults to <code>'100'</code>. If your system uses a different client, set the <code>HANA_MANDT</code> environment variable (see Section 10).</div>
+
+<h2>5.3 Verify Table Access</h2>
+<pre>-- Run as ZSEASONAL_USER to verify access
+SELECT COUNT(*) FROM "/DMF/TS_PS" WHERE MANDT = '100';
+SELECT COUNT(*) FROM "ZSEASONAL_CLASS_RUN";
+SELECT COUNT(*) FROM "ZSEASONAL_CLASS_RESULT";</pre>
+<p>All three queries should return without permission errors.</p>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="deploy-cap">6. Deploy CAP Backend</h1>
+<p>The CAP backend (<code>seasonal-detector-cap</code>) proxies all HANA access and exposes a REST API that the agent calls.</p>
+
+<h2>6.1 Clone the Repository</h2>
+<pre>git clone &lt;repository-url&gt; seasonal-agent
+cd seasonal-agent/assets/seasonal-detector-cap</pre>
+
+<h2>6.2 Install Dependencies</h2>
+<pre>npm install</pre>
+
+<h2>6.3 Log In to Cloud Foundry</h2>
+<pre>cf login -a https://api.cf.&lt;region&gt;.hana.ondemand.com
+# Enter your email and password when prompted
+cf target -o &lt;your-org&gt; -s &lt;your-space&gt;</pre>
+
+<h2>6.4 Build the MTA Archive</h2>
+<pre>mbt build</pre>
+<p>This creates a <code>.mtar</code> file in the <code>mta_archives/</code> directory.</p>
+
+<h2>6.5 Deploy to Cloud Foundry</h2>
+<pre>cf deploy mta_archives/seasonal-detector-cap_1.0.0.mtar</pre>
+
+<p>The deployment will automatically:</p>
+<ul>
+  <li>Create the <code>seasonal-detector-connectivity</code> service instance (Connectivity, lite)</li>
+  <li>Create the <code>seasonal-detector-destination</code> service instance (Destination, lite)</li>
+  <li>Create the <code>seasonal-detector-xsuaa</code> service instance (XSUAA, application)</li>
+  <li>Deploy the <code>seasonal-detector-cap-srv</code> Node.js application</li>
+  <li>Bind all services to the application</li>
+</ul>
+
+<h2>6.6 Note the Deployed URL</h2>
+<pre>cf app seasonal-detector-cap-srv</pre>
+<p>The <strong>routes</strong> line shows the URL, e.g.:</p>
+<pre>routes: seasonal-detector-cap-srv.cfapps.eu10.hana.ondemand.com</pre>
+<p>Record this URL — you will need it in the next step. Your two API base URLs will be:</p>
+<table>
+  <tr><th>Variable</th><th>Value</th></tr>
+  <tr><td><code>CAP_TIMESERIES_URL</code></td><td><code>https://seasonal-detector-cap-srv.cfapps.&lt;region&gt;.hana.ondemand.com/api/timeseries</code></td></tr>
+  <tr><td><code>CAP_CLASSIFICATIONS_URL</code></td><td><code>https://seasonal-detector-cap-srv.cfapps.&lt;region&gt;.hana.ondemand.com/api/classifications</code></td></tr>
+</table>
+
+<h2>6.7 Verify CAP Backend Health</h2>
+<pre>curl https://seasonal-detector-cap-srv.cfapps.&lt;region&gt;.hana.ondemand.com/health</pre>
+<p>Expected response: <code>{"status":"UP"}</code> or HTTP 200.</p>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="deploy-agent">7. Configure &amp; Deploy the Agent</h1>
+
+<h2>7.1 Update Environment Variables in manifest.yml</h2>
+<p>Open <code>assets/seasonal-article-detector-agent/manifest.yml</code> and fill in the blank values:</p>
+<pre>env:
+  CAP_TIMESERIES_URL:      "https://seasonal-detector-cap-srv.cfapps.&lt;region&gt;.hana.ondemand.com/api/timeseries"
+  CAP_CLASSIFICATIONS_URL: "https://seasonal-detector-cap-srv.cfapps.&lt;region&gt;.hana.ondemand.com/api/classifications"</pre>
+
+<div class="info">All other env vars have sensible defaults. Adjust thresholds only if required for your article/sales data characteristics.</div>
+
+<h2>7.2 Create Agent Service Instances (if not already done)</h2>
+<p>If you did not create these in Step 3.1, create them now:</p>
+<pre>cf create-service connectivity lite proj-vector-connectivity-service
+cf create-service destination   lite proj-vector-destination-service</pre>
+
+<h2>7.3 Deploy the Agent via Cloud Foundry Push</h2>
+<pre>cd assets/seasonal-article-detector-agent
+cf push</pre>
+<p>This uses <code>manifest.yml</code> in the current directory.</p>
+
+<h2>7.4 Deploy Workflows via Joule Studio (Optional — for AI Core runtime)</h2>
+<p>If you are deploying to Joule Studio instead of plain CF, trigger the GitHub Actions workflow. You must first configure the following secrets in your GitHub repository:</p>
+<table>
+  <tr><th>Secret Name</th><th>Where to find it</th></tr>
+  <tr><td><code>SCI_TENANT_URL</code></td><td>Joule Studio tenant URL</td></tr>
+  <tr><td><code>SCI_CLIENT_ID</code></td><td>Joule Studio service key → clientid</td></tr>
+  <tr><td><code>SCI_CLIENT_SECRET</code></td><td>Joule Studio service key → clientsecret</td></tr>
+  <tr><td><code>JOULE_STUDIO_URL</code></td><td>Joule Studio API URL</td></tr>
+</table>
+<p>Then: GitHub → Actions → <strong>Deploy to Joule Studio</strong> → Run workflow.</p>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="verification">8. Post-Deployment Verification</h1>
+
+<h2>8.1 Verification Checklist</h2>
+<table>
+  <tr><th>#</th><th>Check</th><th>Command / Action</th><th>Expected Result</th></tr>
+  <tr>
+    <td>1</td>
+    <td>CAP backend running</td>
+    <td><code>cf app seasonal-detector-cap-srv</code></td>
+    <td>State: <strong>started</strong>, 1/1 instances</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>Agent running</td>
+    <td><code>cf app seasonal-article-detector-agent</code></td>
+    <td>State: <strong>started</strong>, 1/1 instances</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>CAP health endpoint</td>
+    <td><code>curl https://&lt;cap-url&gt;/health</code></td>
+    <td>HTTP 200</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>Agent health endpoint</td>
+    <td><code>curl https://&lt;agent-url&gt;/.well-known/agent.json</code></td>
+    <td>JSON with agent metadata</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>Cloud Connector connectivity</td>
+    <td>BTP Cockpit → Destination → CAR_HANA → Check Connection</td>
+    <td>Connection to &lt;virtual-host&gt;:30015 is OK</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>HANA read access</td>
+    <td>POST <code>/api/timeseries/readTimeSeries</code> with sample article/store IDs</td>
+    <td>Returns time-series records array</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>HANA write access</td>
+    <td>POST <code>/api/classifications/upsertRun</code> with <code>{"run": {"status": "RUNNING"}}</code></td>
+    <td>Returns <code>{"ID": "...", "status": "RUNNING"}</code></td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>CAP_TIMESERIES_URL set</td>
+    <td><code>cf env seasonal-article-detector-agent</code></td>
+    <td>CAP_TIMESERIES_URL is not empty</td>
+  </tr>
+  <tr>
+    <td>9</td>
+    <td>CAP_CLASSIFICATIONS_URL set</td>
+    <td><code>cf env seasonal-article-detector-agent</code></td>
+    <td>CAP_CLASSIFICATIONS_URL is not empty</td>
+  </tr>
+</table>
+
+<h2>8.2 Sample API Test — Read Time-Series</h2>
+<pre>curl -X POST \
+  https://&lt;cap-url&gt;/api/timeseries/readTimeSeries \
+  -H "Content-Type: application/json" \
+  -d '{
+    "articleIds": ["&lt;your-article-id&gt;"],
+    "storeIds":   ["&lt;your-store-id&gt;"],
+    "startDate":  "2022-01-01",
+    "endDate":    "2024-12-31",
+    "granularity": "W"
+  }'</pre>
+<p>Expected: JSON array of <code>{articleId, storeId, date, salesQuantity, salesValue}</code> records.</p>
+
+<h2>8.3 Sample API Test — Upsert Classification Run</h2>
+<pre>curl -X POST \
+  https://&lt;cap-url&gt;/api/classifications/upsertRun \
+  -H "Content-Type: application/json" \
+  -d '{"run": {"status": "RUNNING", "startedAt": "2026-11-02T10:00:00Z"}}'</pre>
+<p>Expected: <code>{"value": {"ID": "&lt;uuid&gt;", "status": "RUNNING"}}</code></p>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="troubleshooting">9. Troubleshooting Guide</h1>
+
+<table>
+  <tr><th width="30%">Symptom</th><th width="35%">Likely Cause</th><th width="35%">Fix</th></tr>
+  <tr>
+    <td><code>BTP Destination Service binding not found</code></td>
+    <td>The CF app is not bound to a Destination service instance</td>
+    <td>Run <code>cf bind-service &lt;app&gt; &lt;destination-instance&gt;</code> then <code>cf restart &lt;app&gt;</code></td>
+  </tr>
+  <tr>
+    <td><code>Destination 'CAR_HANA' not found (404)</code></td>
+    <td>BTP Destination named CAR_HANA does not exist</td>
+    <td>Create it in BTP Cockpit → Connectivity → Destinations (Section 3.3)</td>
+  </tr>
+  <tr>
+    <td><code>HANA connect failed: connection refused</code></td>
+    <td>Cloud Connector is not running or not connected to this subaccount</td>
+    <td>Check Cloud Connector Admin UI → Connector status is green; verify subaccount mapping</td>
+  </tr>
+  <tr>
+    <td><code>HANA connect failed: invalid credentials</code></td>
+    <td>Wrong user/password in BTP Destination</td>
+    <td>Edit BTP Destination → re-enter credentials → Check Connection</td>
+  </tr>
+  <tr>
+    <td><code>HANA SQL failed: insufficient privilege</code></td>
+    <td>HANA user missing SELECT/INSERT grants</td>
+    <td>Run GRANT statements from Section 5.2 as DBA</td>
+  </tr>
+  <tr>
+    <td><code>HANA SQL failed: invalid table name: ZSEASONAL_CLASS_RUN</code></td>
+    <td>DDL script not executed yet</td>
+    <td>Run <code>ddl.sql</code> against the HANA instance (Section 5.1)</td>
+  </tr>
+  <tr>
+    <td>Agent falls back to preview mock data</td>
+    <td>CAP_TIMESERIES_URL or CAP_CLASSIFICATIONS_URL is blank</td>
+    <td>Set both env vars in <code>manifest.yml</code> and re-push agent</td>
+  </tr>
+  <tr>
+    <td>CAP backend crashes on startup: <code>Cannot find module 'socks-proxy-agent'</code></td>
+    <td>npm install not run before deploy</td>
+    <td>Run <code>npm install</code> inside <code>assets/seasonal-detector-cap</code>, then rebuild</td>
+  </tr>
+  <tr>
+    <td><code>BTP Connectivity Service binding not found</code></td>
+    <td>CF app not bound to Connectivity service</td>
+    <td>Run <code>cf bind-service &lt;app&gt; &lt;connectivity-instance&gt;</code> then <code>cf restart</code></td>
+  </tr>
+  <tr>
+    <td>Cloud Connector shows destination as <em>unreachable</em></td>
+    <td>Firewall blocks TCP 30015 between Cloud Connector host and HANA</td>
+    <td>Ask network team to open port 30015 from Cloud Connector host to HANA server</td>
+  </tr>
+  <tr>
+    <td><code>Connectivity token fetch failed: 401</code></td>
+    <td>XSUAA client credentials in Connectivity binding are wrong</td>
+    <td>Delete and re-create the Connectivity service instance; rebind and restart</td>
+  </tr>
+  <tr>
+    <td>Wrong MANDT — no data returned from /DMF/TS_PS</td>
+    <td>MANDT hardcoded as '100' but customer system uses different client</td>
+    <td>Contact SAP to clarify: the MANDT filter is in <code>timeseries-handler.js</code> line with <code>MANDT = '100'</code> — update to the correct value and redeploy CAP</td>
+  </tr>
+</table>
+
+<h2>9.1 Viewing Application Logs</h2>
+<pre>cf logs seasonal-detector-cap-srv --recent
+cf logs seasonal-article-detector-agent --recent</pre>
+
+<h2>9.2 Checking Environment Variables</h2>
+<pre>cf env seasonal-detector-cap-srv
+cf env seasonal-article-detector-agent</pre>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<h1 id="reference">10. Reference: All Environment Variables</h1>
+
+<h2>10.1 Agent (seasonal-article-detector-agent)</h2>
+<table>
+  <tr><th>Variable</th><th>Required</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>CAP_TIMESERIES_URL</code></td><td class="check">Yes</td><td><em>blank → preview mode</em></td><td>Base URL of CAP /api/timeseries endpoint</td></tr>
+  <tr><td><code>CAP_CLASSIFICATIONS_URL</code></td><td class="check">Yes</td><td><em>blank → preview mode</em></td><td>Base URL of CAP /api/classifications endpoint</td></tr>
+  <tr><td><code>AICORE_DESTINATION_NAME</code></td><td class="check">Yes</td><td><code>aicore</code></td><td>BTP Destination name for AI Core LLM</td></tr>
+  <tr><td><code>AGENT_LLM_MODEL</code></td><td>No</td><td><code>gpt-4o</code></td><td>LLM model name to use</td></tr>
+  <tr><td><code>SEASONAL_STRENGTH_THRESHOLD</code></td><td>No</td><td><code>0.3</code></td><td>STL seasonal strength threshold (0–1)</td></tr>
+  <tr><td><code>MIN_CONFIDENCE_THRESHOLD</code></td><td>No</td><td><code>60.0</code></td><td>Minimum confidence score to label as SEASONAL</td></tr>
+  <tr><td><code>MIN_DATA_YEARS</code></td><td>No</td><td><code>2</code></td><td>Minimum years of data required for analysis</td></tr>
+  <tr><td><code>REPLENISHMENT_WORKFLOW_DESTINATION_NAME</code></td><td>No</td><td><code>REPLENISHMENT_WORKFLOW</code></td><td>BTP Destination name for replenishment webhook</td></tr>
+  <tr><td><code>CLASSIFICATION_NOTIFICATION_WORKFLOW_DESTINATION_NAME</code></td><td>No</td><td><code>CLASSIFICATION_NOTIFICATION_WORKFLOW</code></td><td>BTP Destination name for notification webhook</td></tr>
+  <tr><td><code>LOG_LEVEL</code></td><td>No</td><td><code>INFO</code></td><td>Python logging level (DEBUG, INFO, WARNING, ERROR)</td></tr>
+</table>
+
+<h2>10.2 CAP Backend (seasonal-detector-cap-srv)</h2>
+<table>
+  <tr><th>Variable</th><th>Required</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>CAR_HANA_DESTINATION_NAME</code></td><td>No</td><td><code>CAR_HANA</code></td><td>Name of BTP Destination for reading CAR HANA</td></tr>
+  <tr><td><code>CAR_HANA_WRITE_DESTINATION_NAME</code></td><td>No</td><td>Same as above</td><td>BTP Destination for writing classification results (use if read/write users differ)</td></tr>
+  <tr><td><code>VCAP_SERVICES</code></td><td class="check">Yes</td><td><em>auto-injected by CF</em></td><td>BTP service bindings — set automatically when services are bound</td></tr>
+</table>
+
+<div class="info"><strong>Note on VCAP_SERVICES:</strong> This is automatically injected by Cloud Foundry when services are bound to the application. You do not set this manually — binding the Connectivity and Destination service instances is sufficient.</div>
+
+<h2>10.3 MANDT / Client Customisation</h2>
+<p>The CAR HANA query in <code>timeseries-handler.js</code> filters with <code>MANDT = '100'</code>. If your CAR system uses a different SAP client, edit that value directly in the file and redeploy the CAP backend.</p>
+
+<hr>
+<p style="font-size:9pt; color:#888; text-align:center; margin-top:40px;">
+  SAP Seasonal Article Detector Agent &nbsp;|&nbsp; Deployment Guide v1.0 &nbsp;|&nbsp; Confidential
+</p>
+
+</body>
+</html>
