@@ -60,35 +60,181 @@
 
 <p>The <strong>Seasonal Article Detector Agent</strong> is an AI-powered agent that automatically classifies articles as seasonal or non-seasonal using historical sales time-series data from SAP CAR/CARAB. It runs on SAP BTP Cloud Foundry and connects to your on-premise HANA database through SAP Cloud Connector.</p>
 
-<h3>Component Map</h3>
-<pre>
-┌─────────────────────────────────────────────────────────┐
-│                   SAP BTP Cloud Foundry                 │
-│                                                         │
-│  ┌────────────────────┐   ┌──────────────────────────┐  │
-│  │  seasonal-article  │──▶│  seasonal-detector-cap   │  │
-│  │  -detector-agent   │   │   (Node.js CAP backend)  │  │
-│  │  (Python A2A)      │   └──────────┬───────────────┘  │
-│  └────────────────────┘              │                  │
-│                                      │ BTP Connectivity │
-│                                      │ Service (SOCKS5) │
-└──────────────────────────────────────┼──────────────────┘
-                                       │
-                             ┌─────────▼──────────┐
-                             │  SAP Cloud          │
-                             │  Connector          │
-                             │  (on-premise)       │
-                             └─────────┬──────────┘
-                                       │
-                             ┌─────────▼──────────┐
-                             │  On-Premise HANA    │
-                             │                     │
-                             │  /DMF/TS_PS  (read) │
-                             │  ZSEASONAL_CLASS_RUN │
-                             │  ZSEASONAL_CLASS_    │
-                             │  RESULT     (write) │
-                             └────────────────────┘
-</pre>
+<h3>System Architecture Diagram</h3>
+<svg viewBox="0 0 880 790" xmlns="http://www.w3.org/2000/svg" style="font-family:Calibri,Arial,sans-serif;display:block;width:100%;max-width:880px;margin:12px 0;">
+  <defs>
+    <marker id="ah"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#444"/></marker>
+    <marker id="ahb" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#1e40af"/></marker>
+    <marker id="aho" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#b45309"/></marker>
+  </defs>
+
+  <!-- USER ZONE -->
+  <rect x="255" y="10" width="370" height="52" rx="8" fill="#e8eaf6" stroke="#3949ab" stroke-width="1.5"/>
+  <text x="440" y="31" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a237e">User / Joule Studio</text>
+  <text x="440" y="50" text-anchor="middle" font-size="9" fill="#3949ab">Demand Planner · API Client · Joule Studio Interface</text>
+
+  <!-- BTP CF ZONE -->
+  <rect x="10" y="78" width="860" height="425" rx="10" fill="#f0f6ff" stroke="#003366" stroke-width="2"/>
+  <text x="25" y="97" font-size="10" font-weight="bold" fill="#003366">SAP BTP Cloud Foundry</text>
+
+  <!-- AGENT BOX -->
+  <rect x="20" y="103" width="340" height="260" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+  <rect x="20" y="103" width="340" height="26" rx="6" fill="#1e40af"/><rect x="20" y="117" width="340" height="12" fill="#1e40af"/>
+  <text x="190" y="121" text-anchor="middle" font-size="10" font-weight="bold" fill="white">seasonal-article-detector-agent</text>
+  <text x="190" y="143" text-anchor="middle" font-size="8" fill="#1e3a8a">Python 3.12 · A2A SDK 0.3.22 · LangGraph 1.2.6 · gunicorn/uvicorn · Port 5000</text>
+  <line x1="28" y1="150" x2="352" y2="150" stroke="#93c5fd" stroke-width="0.8"/>
+  <text x="28" y="164" font-size="8.5" font-weight="bold" fill="#1e40af">LangChain Tools (7):</text>
+  <text x="36" y="179" font-size="8.5" fill="#1e3a8a">▸ read_carab_timeseries — fetches /DMF/TS_PS via CAP backend</text>
+  <text x="36" y="194" font-size="8.5" fill="#1e3a8a">▸ run_seasonality_detection — STL decomposition (statsmodels 0.14.4)</text>
+  <text x="36" y="209" font-size="8.5" fill="#1e3a8a">▸ persist_classifications — writes ZSEASONAL_CLASS_* via CAP</text>
+  <text x="36" y="224" font-size="8.5" fill="#1e3a8a">▸ get_classification_results — reads results via CAP getResults</text>
+  <text x="36" y="239" font-size="8.5" fill="#1e3a8a">▸ get_run_status — reads run header via CAP getRun</text>
+  <text x="36" y="254" font-size="8.5" fill="#1e3a8a">▸ trigger_replenishment_adjustment — HTTP via BTP Destination</text>
+  <text x="36" y="269" font-size="8.5" fill="#1e3a8a">▸ send_classification_notification — HTTP via BTP Destination</text>
+  <line x1="28" y1="277" x2="352" y2="277" stroke="#93c5fd" stroke-width="0.8"/>
+  <text x="28" y="291" font-size="8" fill="#1e3a8a">CF mode: tools call CAP + n8n via BTP Destinations</text>
+  <text x="28" y="305" font-size="8" fill="#1e3a8a">Joule mode: n8n tools replaced by MCP (Agent Gateway)</text>
+  <text x="28" y="319" font-size="8" fill="#1e3a8a">Env: CAP_TIMESERIES_URL · CAP_CLASSIFICATIONS_URL · AICORE_DESTINATION_NAME</text>
+  <text x="28" y="349" font-size="8" fill="#1e3a8a">Packages: litellm · langchain · a2a-sdk · statsmodels · numpy · httpx</text>
+
+  <!-- CAP BOX -->
+  <rect x="20" y="378" width="340" height="113" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+  <rect x="20" y="378" width="340" height="26" rx="6" fill="#1e40af"/><rect x="20" y="392" width="340" height="12" fill="#1e40af"/>
+  <text x="190" y="396" text-anchor="middle" font-size="10" font-weight="bold" fill="white">seasonal-detector-cap  (CAP Backend)</text>
+  <text x="190" y="419" text-anchor="middle" font-size="8" fill="#1e3a8a">Node.js 20 · @sap/cds ^8 · @sap/hana-client ^2 · socks-proxy-agent ^8 · Port 4004</text>
+  <line x1="28" y1="426" x2="352" y2="426" stroke="#93c5fd" stroke-width="0.8"/>
+  <text x="36" y="441" font-size="8.5" fill="#1e3a8a">TimeSeriesService  →  POST /api/timeseries/readTimeSeries</text>
+  <text x="36" y="456" font-size="8.5" fill="#1e3a8a">ClassificationService  →  POST /api/classifications/{upsertRun|saveResults|getResults|getRun}</text>
+  <text x="36" y="471" font-size="8" fill="#1e3a8a">Files: timeseries-handler.js · classification-handler.js · hana-client.js (shared)</text>
+
+  <!-- AI CORE BOX -->
+  <rect x="465" y="103" width="385" height="80" rx="6" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+  <rect x="465" y="103" width="385" height="26" rx="6" fill="#15803d"/><rect x="465" y="117" width="385" height="12" fill="#15803d"/>
+  <text x="657" y="121" text-anchor="middle" font-size="10" font-weight="bold" fill="white">SAP AI Core</text>
+  <text x="657" y="145" text-anchor="middle" font-size="8.5" fill="#14532d">Model: GPT-4o · Plan: extended · BTP Destination: aicore (OAuth2ClientCredentials)</text>
+  <text x="657" y="162" text-anchor="middle" font-size="8.5" fill="#14532d">LLM inference for seasonality analysis and replenishment strategy generation</text>
+
+  <!-- N8N BOX -->
+  <rect x="465" y="196" width="385" height="110" rx="6" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+  <rect x="465" y="196" width="385" height="26" rx="6" fill="#c2410c"/><rect x="465" y="210" width="385" height="12" fill="#c2410c"/>
+  <text x="657" y="214" text-anchor="middle" font-size="10" font-weight="bold" fill="white">Joule Studio / n8n Workflows</text>
+  <text x="473" y="238" font-size="8.5" fill="#7c2d12">▸ Replenishment Adjustment Workflow  (BTP Dest: REPLENISHMENT_WORKFLOW)</text>
+  <text x="473" y="253" font-size="8.5" fill="#7c2d12">▸ Classification Notification Workflow  (BTP Dest: CLASSIFICATION_NOTIFICATION_WORKFLOW)</text>
+  <text x="473" y="268" font-size="8.5" fill="#7c2d12">▸ Workflow nodes call back to agent via A2A for replenishment strategy</text>
+  <text x="473" y="283" font-size="8.5" fill="#7c2d12">▸ MCP Servers wrap webhook APIs for Joule runtime tool discovery</text>
+
+  <!-- BTP SERVICES BOX -->
+  <rect x="465" y="319" width="385" height="175" rx="6" fill="#faf5ff" stroke="#7e22ce" stroke-width="1.5"/>
+  <rect x="465" y="319" width="385" height="26" rx="6" fill="#7e22ce"/><rect x="465" y="333" width="385" height="12" fill="#7e22ce"/>
+  <text x="657" y="337" text-anchor="middle" font-size="10" font-weight="bold" fill="white">BTP Platform Services</text>
+  <text x="473" y="362" font-size="9" font-weight="bold" fill="#581c87">▸ Destination Service  (plan: lite)</text>
+  <text x="483" y="377" font-size="8" fill="#4c1d95">Resolves: CAR_HANA (Type=HANA, ProxyType=OnPremise), aicore (HTTP/OAuth2)</text>
+  <text x="483" y="391" font-size="8" fill="#4c1d95">Also: REPLENISHMENT_WORKFLOW, CLASSIFICATION_NOTIFICATION_WORKFLOW destinations</text>
+  <text x="473" y="410" font-size="9" font-weight="bold" fill="#581c87">▸ Connectivity Service  (plan: lite)</text>
+  <text x="483" y="425" font-size="8" fill="#4c1d95">SOCKS5 proxy (onpremise_proxy_host:port) tunnels @sap/hana-client traffic</text>
+  <text x="483" y="440" font-size="8" fill="#4c1d95">JWT token from token_service_url authorises SOCKS5 tunnel to Cloud Connector</text>
+  <text x="473" y="459" font-size="9" font-weight="bold" fill="#581c87">▸ XSUAA — Authorization &amp; Trust Management  (plan: application)</text>
+  <text x="483" y="474" font-size="8" fill="#4c1d95">OAuth2 client credentials for Destination API · xs-security.json · tenant-mode: dedicated</text>
+
+  <!-- ON-PREMISE ZONE -->
+  <rect x="10" y="515" width="860" height="265" rx="10" fill="#f9f9f9" stroke="#64748b" stroke-width="2" stroke-dasharray="8,4"/>
+  <text x="25" y="534" font-size="10" font-weight="bold" fill="#475569">On-Premise Network (Customer)</text>
+
+  <!-- CLOUD CONNECTOR BOX -->
+  <rect x="20" y="543" width="240" height="175" rx="6" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+  <rect x="20" y="543" width="240" height="26" rx="6" fill="#475569"/><rect x="20" y="557" width="240" height="12" fill="#475569"/>
+  <text x="140" y="561" text-anchor="middle" font-size="10" font-weight="bold" fill="white">SAP Cloud Connector</text>
+  <text x="140" y="582" text-anchor="middle" font-size="8.5" fill="#334155">Bridges BTP subaccount ↔ on-premise network</text>
+  <line x1="28" y1="589" x2="252" y2="589" stroke="#cbd5e1" stroke-width="0.8"/>
+  <text x="28" y="604" font-size="8.5" font-weight="bold" fill="#334155">System Mapping (Access Control):</text>
+  <text x="28" y="619" font-size="8.5" fill="#334155">Virtual:  car-hana-virtual : 30015</text>
+  <text x="28" y="634" font-size="8.5" fill="#334155">Real:     &lt;HANA hostname&gt; : 30015</text>
+  <text x="28" y="649" font-size="8.5" fill="#334155">Type: SAP HANA · Protocol: TCP</text>
+  <line x1="28" y1="657" x2="252" y2="657" stroke="#cbd5e1" stroke-width="0.8"/>
+  <text x="28" y="672" font-size="8" fill="#475569">Admin UI: https://&lt;host&gt;:8443</text>
+  <text x="28" y="687" font-size="8" fill="#475569">Subaccount: mapped to BTP region/ID</text>
+  <text x="28" y="702" font-size="8" fill="#475569">Install: Windows or Linux host (on-premise)</text>
+
+  <!-- HANA CAR BOX -->
+  <rect x="275" y="530" width="575" height="228" rx="6" fill="#fff9f0" stroke="#b45309" stroke-width="1.5"/>
+  <rect x="275" y="530" width="575" height="26" rx="6" fill="#b45309"/><rect x="275" y="544" width="575" height="12" fill="#b45309"/>
+  <text x="562" y="548" text-anchor="middle" font-size="10" font-weight="bold" fill="white">On-Premise CAR HANA</text>
+  <text x="562" y="569" text-anchor="middle" font-size="8.5" fill="#78350f">@sap/hana-client ^2 · socks-proxy-agent ^8 · TCP port 30015 · MANDT: 100 (configurable)</text>
+  <text x="562" y="583" text-anchor="middle" font-size="8.5" fill="#78350f">Technical user: ZSEASONAL_USER  (dedicated, minimum-privilege account)</text>
+  <line x1="283" y1="590" x2="842" y2="590" stroke="#fbbf24" stroke-width="0.8"/>
+
+  <!-- Existing table sub-box -->
+  <rect x="284" y="596" width="268" height="150" rx="4" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+  <text x="418" y="613" text-anchor="middle" font-size="9" font-weight="bold" fill="#92400e">Existing CAR Table  (READ ONLY)</text>
+  <line x1="290" y1="618" x2="546" y2="618" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="292" y="634" font-size="9" font-weight="bold" fill="#78350f">/DMF/TS_PS</text>
+  <text x="292" y="649" font-size="8" fill="#78350f">Key: MANDT · PROD_ID (Article) · LOC_ID (Store)</text>
+  <text x="292" y="663" font-size="8" fill="#78350f">Key: TSTFR (SAP serial date) · TIME_GRAN (D/W)</text>
+  <text x="292" y="677" font-size="8" fill="#78350f">Data: UNIT_SALES · REVENUE_NET · OOS_PCT …</text>
+  <text x="292" y="691" font-size="8" fill="#78350f" font-style="italic">@cds.persistence.exists · SELECT permission only</text>
+  <text x="292" y="705" font-size="8" fill="#78350f" font-style="italic">Access via timeseries-handler.js direct SQL</text>
+  <text x="292" y="720" font-size="7.5" fill="#b45309">GRANT: SELECT on /DMF/TS_PS TO ZSEASONAL_USER</text>
+  <text x="292" y="736" font-size="7.5" fill="#b45309">Filter: MANDT='100' AND UNIT_SALES &gt; 0</text>
+
+  <!-- New Z-tables sub-box -->
+  <rect x="564" y="596" width="278" height="150" rx="4" fill="#fef9ef" stroke="#d97706" stroke-width="1"/>
+  <text x="703" y="613" text-anchor="middle" font-size="9" font-weight="bold" fill="#92400e">New Z-Tables  (READ / WRITE)</text>
+  <line x1="570" y1="618" x2="836" y2="618" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="572" y="634" font-size="9" font-weight="bold" fill="#78350f">ZSEASONAL_CLASS_RUN</text>
+  <text x="572" y="649" font-size="8" fill="#78350f">ID · STATUS · STARTED/COMPLETED_AT</text>
+  <text x="572" y="663" font-size="8" fill="#78350f">TOTAL_PROCESSED · COVERAGE_PCT · counts</text>
+  <line x1="570" y1="671" x2="836" y2="671" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="572" y="687" font-size="9" font-weight="bold" fill="#78350f">ZSEASONAL_CLASS_RESULT</text>
+  <text x="572" y="702" font-size="8" fill="#78350f">ID · RUN_ID · ARTICLE_ID · STORE_ID</text>
+  <text x="572" y="716" font-size="8" fill="#78350f">CLASSIFICATION · CONFIDENCE_SCORE</text>
+  <text x="572" y="730" font-size="8" fill="#78350f">SEASON_START/END_WEEK · STRENGTH_INDEX</text>
+  <text x="572" y="744" font-size="7.5" fill="#b45309" font-style="italic">Created once by DBA via db/ddl.sql</text>
+  <text x="572" y="758" font-size="7.5" fill="#b45309">GRANT: SELECT/INSERT/UPDATE (RUN) · SELECT/INSERT (RESULT)</text>
+
+  <!-- ARROWS -->
+  <!-- 1. User → Agent (A2A) -->
+  <polyline points="440,62 440,87 190,87 190,103" fill="none" stroke="#3949ab" stroke-width="1.5" marker-end="url(#ahb)"/>
+  <rect x="296" y="78" width="160" height="14" rx="3" fill="#e8eaf6" opacity="0.9"/>
+  <text x="376" y="89" text-anchor="middle" font-size="8" fill="#1a237e" font-weight="bold">A2A Protocol  (HTTP / JSON)</text>
+
+  <!-- 2. Agent ↔ AI Core -->
+  <line x1="360" y1="143" x2="461" y2="143" fill="none" stroke="#15803d" stroke-width="1.3" marker-end="url(#ah)"/>
+  <line x1="461" y1="153" x2="360" y2="153" fill="none" stroke="#15803d" stroke-width="1.3" marker-end="url(#ah)"/>
+  <rect x="362" y="130" width="99" height="27" rx="2" fill="white" opacity="0.92"/>
+  <text x="411" y="141" text-anchor="middle" font-size="7.5" fill="#14532d">HTTP · OAuth2</text>
+  <text x="411" y="154" text-anchor="middle" font-size="7.5" fill="#14532d">BTP Dest: aicore</text>
+
+  <!-- 3. Agent ↔ n8n -->
+  <line x1="360" y1="249" x2="461" y2="249" fill="none" stroke="#c2410c" stroke-width="1.3" marker-end="url(#ah)"/>
+  <line x1="461" y1="259" x2="360" y2="259" fill="none" stroke="#c2410c" stroke-width="1.3" marker-end="url(#ah)"/>
+  <rect x="361" y="236" width="100" height="27" rx="2" fill="white" opacity="0.92"/>
+  <text x="411" y="248" text-anchor="middle" font-size="7.5" fill="#7c2d12">HTTP webhooks</text>
+  <text x="411" y="261" text-anchor="middle" font-size="7.5" fill="#7c2d12">BTP Destinations</text>
+
+  <!-- 4. Agent → CAP -->
+  <line x1="190" y1="363" x2="190" y2="378" fill="none" stroke="#1e40af" stroke-width="1.5" marker-end="url(#ahb)"/>
+  <rect x="196" y="360" width="160" height="26" rx="2" fill="white" opacity="0.92"/>
+  <text x="276" y="371" text-anchor="middle" font-size="7.5" fill="#1e40af">HTTP REST</text>
+  <text x="276" y="383" text-anchor="middle" font-size="7.5" fill="#1e40af">CAP_TIMESERIES_URL / CAP_CLASSIFICATIONS_URL</text>
+
+  <!-- 5. CAP → BTP Services -->
+  <line x1="360" y1="440" x2="461" y2="440" fill="none" stroke="#7e22ce" stroke-width="1.3" marker-end="url(#ah)"/>
+  <rect x="361" y="428" width="100" height="26" rx="2" fill="white" opacity="0.92"/>
+  <text x="411" y="439" text-anchor="middle" font-size="7.5" fill="#7e22ce">VCAP_SERVICES</text>
+  <text x="411" y="452" text-anchor="middle" font-size="7.5" fill="#7e22ce">bindings (CF inject)</text>
+
+  <!-- 6. CAP → Cloud Connector (SOCKS5 through BTP boundary) -->
+  <polyline points="120,491 120,510 140,510 140,543" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ah)"/>
+  <rect x="143" y="495" width="142" height="28" rx="2" fill="white" opacity="0.92"/>
+  <text x="214" y="507" text-anchor="middle" font-size="7.5" fill="#475569" font-weight="bold">SOCKS5 proxy tunnel</text>
+  <text x="214" y="520" text-anchor="middle" font-size="7.5" fill="#475569">(BTP Connectivity Service)</text>
+
+  <!-- 7. Cloud Connector → HANA (TCP) -->
+  <line x1="260" y1="630" x2="275" y2="630" fill="none" stroke="#b45309" stroke-width="1.8" marker-end="url(#aho)"/>
+  <rect x="252" y="615" width="76" height="17" rx="2" fill="white" opacity="0.92"/>
+  <text x="265" y="627" text-anchor="middle" font-size="8" fill="#b45309" font-weight="bold">TCP :30015</text>
+
+</svg>
 
 <h3>What Gets Deployed</h3>
 <table>
